@@ -52,19 +52,25 @@
 <div id="subscription-modal" style="display:none;">
     <div class="login-box" style="text-align: center;">
         <h2 style="color: #d29922; margin-bottom: 15px;">Unlock Full Access</h2>
-        <p style="color: #c9d1d9; font-size: 1rem; margin-bottom: 20px;">Subscribe to <span id="sub-book-title" style="font-weight:bold; color:#fff;"></span> to unlock Average and Difficult practice questions, plus in-depth theory discussions.</p>
+        <p style="color: #c9d1d9; font-size: 1rem; margin-bottom: 20px;">Rent <span id="sub-book-title" style="font-weight:bold; color:#fff;"></span> for 6 months to unlock Average and Difficult practice questions, plus in-depth theory discussions.</p>
         <h3 style="color: #58a6ff; font-size: 2rem; margin-bottom: 25px;" id="sub-book-price">₱0.00</h3>
         <button class="start-btn" style="background:#238636;" onclick="processSubscription()">Confirm Payment</button>
-        <button class="nav-btn-secondary" onclick="document.getElementById('subscription-modal').style.display='none'">Cancel</button>
+        <button class="nav-btn-secondary" onclick="document.getElementById('subscription-modal').style.display='none'; document.getElementById('overlay').style.display='none';">Cancel</button>
     </div>
 </div>
 
 <div id="container" style="display:none;">
     <div id="nav-header-bar">
         <button id="nav-toggle-btn" onclick="toggleNavigator(event)">☰ Menu</button>
-        <select id="book-selector" onchange="handleBookChange(this.value)"></select>
+        
+        <!-- Custom Book Dropdown -->
+        <div id="custom-book-selector" class="custom-dropdown">
+            <div class="dropdown-header" onclick="toggleDropdown()">Select a Book</div>
+            <div class="dropdown-body" id="dropdown-body" style="display: none;"></div>
+        </div>
+
         <button id="dashboard-toggle-btn" onclick="showDashboard()">🏠 Dashboard</button>
-        <button id="subscribe-btn" onclick="showSubscriptionModal()">Unlock Book</button>
+        <button id="subscribe-btn" onclick="showSubscriptionModal()">Rent Book</button>
     </div>
     
     <div id="slide-navigator" class="collapsed">
