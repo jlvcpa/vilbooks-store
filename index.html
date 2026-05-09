@@ -20,12 +20,21 @@
     </div>
 </div>
 
+<!-- New Welcome Screen -->
+<div id="welcome-overlay" style="display:none;">
+    <div class="welcome-box">
+        <h2 id="welcome-title" style="color: #58a6ff; font-size: 2rem; margin-bottom: 10px;">Welcome!</h2>
+        <p style="color: #8b949e; font-size: 1.1rem; margin-bottom: 25px;">Please select a book to open from your library:</p>
+        <div id="welcome-book-list"></div>
+    </div>
+</div>
+
 <div id="dashboard-overlay" style="display:none;">
     <div class="dashboard-box">
         <h2 style="color: #58a6ff; margin-bottom: 15px;">Course Dashboard</h2>
         <div class="dashboard-instruction">
-            <strong>Notice:</strong> You must complete question sets strictly in order. You may review completed sets at any time. 
-            <br><br><em>Warning: Reseting an earlier set will automatically reset all subsequent sets. Unsubscribed users only have access to "Easy" difficulty sets.</em>
+            <strong>Notice:</strong> You must complete question units strictly in order. You may review completed units at any time. 
+            <br><br><em>Warning: Unsubscribed users only have access to "Easy" difficulty practice sets.</em>
         </div>
         <div id="dashboard-sets"></div>
     </div>
@@ -33,14 +42,14 @@
 
 <div id="headsup-overlay" style="display:none;">
     <div class="headsup-box">
-        <h2 id="headsup-title" style="color: #3fb950; font-size: 2.5rem; margin-bottom: 20px;">Prepare for Set</h2>
+        <h2 id="headsup-title" style="color: #3fb950; font-size: 2.5rem; margin-bottom: 20px;">Prepare for Unit</h2>
         <p style="color: #c9d1d9; font-size: 1.2rem; margin-bottom: 30px;">Get ready. The timer will begin immediately after the question is fully narrated.</p>
         <button class="start-btn" onclick="executeStartSet()">Start Now</button>
         <button class="nav-btn-secondary" onclick="showDashboard()">Back to Dashboard</button>
     </div>
 </div>
 
-<div id="celebration-modal">
+<div id="celebration-modal" style="display:none;">
     <div class="celeb-box" id="celeb-box">
         <div class="celeb-title">🎉 Congratulations! 🎉</div>
         <div class="celeb-text" id="celeb-msg">Thank you for finishing the practice set. You got 0 out of 0 highest possible score!</div>
@@ -63,14 +72,13 @@
     <div id="nav-header-bar">
         <button id="nav-toggle-btn" onclick="toggleNavigator(event)">☰ Menu</button>
         
-        <!-- Custom Book Dropdown -->
         <div id="custom-book-selector" class="custom-dropdown">
             <div class="dropdown-header" onclick="toggleDropdown()">Select a Book</div>
             <div class="dropdown-body" id="dropdown-body" style="display: none;"></div>
         </div>
 
         <button id="dashboard-toggle-btn" onclick="showDashboard()">🏠 Dashboard</button>
-        <button id="subscribe-btn" onclick="showSubscriptionModal()">Rent Book</button>
+        <button id="subscribe-btn" onclick="showSubscriptionModal()" style="display:none;">Rent Book</button>
     </div>
     
     <div id="slide-navigator" class="collapsed">
@@ -89,6 +97,10 @@
             <div id="roster-list"></div>
         </div>
 
+        <!-- The Click-to-Flip areas -->
+        <div id="flip-left-zone" class="flip-zone left-zone" onclick="prevSlide()"></div>
+        <div id="flip-right-zone" class="flip-zone right-zone" onclick="nextSlide()"></div>
+
         <div id="slides-container"></div>
     </div>
     
@@ -100,6 +112,9 @@
 
     <div id="courseware-footer">This practice courseware is a personal property of Mr. Joselito Villarta, CPA, MBA</div>
 </div>
+
+<!-- Empty overlay for modals -->
+<div id="overlay" style="display:none;"></div>
 
 <script type="module" src="app.js"></script>
 </body>
