@@ -281,3 +281,13 @@ body.book-mode .book-content { display: block !important; }
     .celeb-title { font-size: 2rem !important; }
     .celeb-text { font-size: 1.1rem !important; }
 }
+
+/* Table of Contents Styles */
+.toc-container { background: transparent; padding: 20px 40px; }
+.toc-main-list { list-style: none; padding: 0; margin: 0; }
+.toc-main-item { margin-bottom: 25px; }
+.toc-main-item strong { font-size: 1.5rem; color: #b07e15; border-bottom: 1px solid #d1d5db; display: block; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase; font-family: 'Segoe UI', sans-serif;}
+.toc-sub-list { list-style: none; padding-left: 20px; }
+.toc-sub-item { margin-bottom: 10px; }
+.toc-sub-item a { font-size: 1.3rem; color: #3b82f6; text-decoration: none; transition: color 0.2s; font-family: 'Georgia', serif;}
+.toc-sub-item a:hover { color: #2563eb; text-decoration: underline; }
