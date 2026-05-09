@@ -6,7 +6,7 @@
 <title>VilBooks Store</title>
 <link rel="stylesheet" href="style.css">
 </head>
-<body class="book-mode"> <!-- Force book mode by default -->
+<body class="book-mode">
 
 <div id="login-overlay">
     <div class="login-box">
@@ -67,7 +67,8 @@
         <ul id="nav-list"></ul>
     </div>
 
-    <div id="top-hud">
+    <!-- Hidden by default, only shown on active question slides -->
+    <div id="top-hud" style="display: none;">
         <div id="timer-display" class="timer-display">00:00</div>
         <div class="score-display" id="hud-score">Set Score: <span id="user-score">0 / 0</span></div>
     </div>
@@ -78,7 +79,7 @@
             <div id="roster-list"></div>
         </div>
 
-        <!-- The Click-to-Flip areas -->
+        <!-- The Click-to-Flip areas for navigation -->
         <div id="flip-left-zone" class="flip-zone left-zone" onclick="prevSlide()"></div>
         <div id="flip-right-zone" class="flip-zone right-zone" onclick="nextSlide()"></div>
 
@@ -86,10 +87,6 @@
     </div>
     
     <div id="question-tracker"></div>
-    <div id="nav-controls">
-        <button class="nav-btn" id="btn-prev" onclick="prevSlide()" disabled>&#9664; Prev</button>
-        <button class="nav-btn" id="btn-next" onclick="nextSlide()">Next &#9654;</button>
-    </div>
 
     <div id="courseware-footer">This practice courseware is a personal property of Mr. Joselito Villarta, CPA, MBA</div>
 </div>
