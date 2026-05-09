@@ -1,10 +1,12 @@
+// app.js
 import { collection, query, getDocs, orderBy, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
 import { db, loginUser } from './auth.js';
 
-import { bookDetails as fabm01Details, bookContent as fabm01Content } from './FABM01/fabm01.js';
+// Import Books (The books now export an array of module objects)
+import { bookDetails as fabm01Details, bookModules as fabm01Modules } from './FABM01/fabm01.js';
 
 window.availableBooks = [
-    { details: fabm01Details, content: fabm01Content }
+    { details: fabm01Details, modules: fabm01Modules }
 ];
 
 window.currentUser = null;
@@ -17,7 +19,7 @@ window.section = "Default";
 window.studentAnswers = {}; 
 window.celebratedSets = new Set(); 
 window.userSubscriptions = []; 
-window.unitTrials = {}; // { "FABM01_Unit 2": timestamp }
+window.unitTrials = {}; 
 window.pendingTrialUnit = null;
 window.pendingTrialIndex = null;
 
@@ -105,7 +107,7 @@ function loadBookContent() {
     const selectedBook = window.availableBooks.find(b => b.details.id === window.currentBookId);
     
     if (container && selectedBook) {
-        // Inject the Landing TOC Slide first, then the book content
+        // Clear container and start building
         container.innerHTML = `
             <div class="slide active" id="landing-slide" data-type="Landing">
                 <div class="book-content" style="display:block !important; width:100%;">
@@ -114,7 +116,59 @@ function loadBookContent() {
                     <div id="dynamic-toc" class="toc-container"></div>
                 </div>
             </div>
-        ` + selectedBook.content;
+        `;
+
+        // Sort modules by sequence to ensure correct order
+        const sortedModules = selectedBook.modules.sort((a, b) => a.sequence - b.sequence);
+        let unitsWithQuestions = new Set();
+
+        sortedModules.forEach(mod => {
+            if (mod.type === "Question") unitsWithQuestions.add(mod.unit);
+            
+            // Render Slide
+            const slideDiv = document.createElement('div');
+            slideDiv.className = 'slide';
+            slideDiv.setAttribute('data-type', mod.type);
+            slideDiv.setAttribute('data-unit', mod.unit);
+            slideDiv.setAttribute('data-maintopic', mod.maintopic);
+            if (mod.subtopic) slideDiv.setAttribute('data-subtopic', mod.subtopic);
+            
+            if (mod.type === "Question") {
+                slideDiv.setAttribute('data-difficulty', mod.difficulty);
+                slideDiv.setAttribute('data-question-id', mod.questionId);
+                slideDiv.setAttribute('data-answer', mod.answer);
+                slideDiv.setAttribute('data-points', mod.points);
+                slideDiv.id = `slide-${mod.questionId}`;
+            }
+
+            slideDiv.innerHTML = mod.html;
+            container.appendChild(slideDiv);
+        });
+
+        // Generate Review Hub Slides for each unit that has questions
+        unitsWithQuestions.forEach(unit => {
+            const hubDiv = document.createElement('div');
+            hubDiv.className = 'slide';
+            hubDiv.setAttribute('data-type', 'ReviewHub');
+            hubDiv.setAttribute('data-unit', unit);
+            hubDiv.setAttribute('data-maintopic', 'Review Questions');
+            hubDiv.setAttribute('data-subtopic', 'Review Questions');
+            hubDiv.innerHTML = `
+                <div class="book-content" style="display:block !important; width:100%;">
+                    <h2>${unit}: Review Questions</h2>
+                    <p>Select a question set below to test your knowledge. You can reset individual sets to try again.</p>
+                    <div class="review-hub-container" id="hub-${unit.replace(/\s+/g, '')}"></div>
+                </div>
+            `;
+            // Insert the hub slide after the last theory slide of that unit
+            const unitSlides = Array.from(container.querySelectorAll(`.slide[data-unit="${unit}"]`));
+            const lastTheorySlide = unitSlides.reverse().find(s => s.getAttribute('data-type') === 'Theory');
+            if (lastTheorySlide) {
+                lastTheorySlide.insertAdjacentElement('afterend', hubDiv);
+            } else {
+                container.appendChild(hubDiv);
+            }
+        });
 
         const isTeacher = window.currentUser && window.currentUser.role === 'teacher';
         const hasSubscribed = isTeacher || window.userSubscriptions.some(sub => sub.bookId === window.currentBookId && sub.expiry > Date.now());
@@ -130,7 +184,85 @@ function loadBookContent() {
     
     initEnvironment();
     generateTOC();
-    showSlide(0); // Jump to landing page immediately
+    showSlide(0); // Jump to landing page
+}
+
+function updateReviewHubs() {
+    const hubs = document.querySelectorAll('.slide[data-type="ReviewHub"]');
+    hubs.forEach(hub => {
+        const unit = hub.getAttribute('data-unit');
+        const container = hub.querySelector('.review-hub-container');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        const difficulties = ['Easy', 'Average', 'Difficult'];
+        const isSubscribed = window.currentUser && window.currentUser.role === 'teacher' || window.userSubscriptions.some(sub => sub.bookId === window.currentBookId && sub.expiry > Date.now());
+
+        difficulties.forEach(diff => {
+            const qSlides = Array.from(document.querySelectorAll(`.slide[data-type="Question"][data-unit="${unit}"][data-difficulty="${diff}"]`));
+            if(qSlides.length === 0) return;
+
+            let answered = 0;
+            let total = qSlides.length;
+            let score = 0;
+            let maxScore = 0;
+
+            qSlides.forEach(s => {
+                const qId = s.getAttribute('data-question-id');
+                const pts = parseInt(s.getAttribute('data-points')) || 0;
+                maxScore += pts;
+                if(window.studentAnswers[qId]) {
+                    answered++;
+                    const ansData = window.studentAnswers[qId];
+                    const userAns = typeof ansData === 'object' ? ansData.val : ansData;
+                    const isExp = typeof ansData === 'object' ? ansData.expired : false;
+                    if(String(userAns).toLowerCase() === String(s.getAttribute('data-answer')).toLowerCase() && !isExp) {
+                        score += pts;
+                    }
+                }
+            });
+
+            const isLocked = !isSubscribed && diff !== 'Easy';
+            let statusText = isLocked ? "🔒 Locked (Requires Rent)" : (answered === 0 ? "Not Started" : (answered === total ? "Completed" : "In Progress"));
+            let scoreText = answered === total ? `Score: ${score} / ${maxScore}` : "";
+            
+            const firstSlideIndex = window.slides.findIndex(s => s === qSlides[0]);
+
+            const row = document.createElement('div');
+            row.className = 'hub-row';
+            row.innerHTML = `
+                <div class="hub-info">
+                    <strong>${diff} Set</strong>
+                    <span class="hub-status">${statusText}</span>
+                    <span class="hub-score">${scoreText}</span>
+                </div>
+            `;
+
+            const btnContainer = document.createElement('div');
+            
+            if (!isLocked) {
+                const startBtn = document.createElement('button');
+                startBtn.className = 'start-btn';
+                startBtn.style.padding = '8px 15px';
+                startBtn.style.fontSize = '0.9rem';
+                startBtn.innerText = answered === total ? 'Review' : (answered > 0 ? 'Continue' : 'Start');
+                startBtn.onclick = () => showSlide(firstSlideIndex);
+                btnContainer.appendChild(startBtn);
+            }
+
+            if (answered > 0) {
+                const resetBtn = document.createElement('button');
+                resetBtn.className = 'reset-btn';
+                resetBtn.style.marginLeft = '10px';
+                resetBtn.innerText = 'Reset';
+                resetBtn.onclick = () => resetSetLogic(unit, diff);
+                btnContainer.appendChild(resetBtn);
+            }
+
+            row.appendChild(btnContainer);
+            container.appendChild(row);
+        });
+    });
 }
 
 function generateTOC() {
@@ -143,7 +275,7 @@ function generateTOC() {
     let hasCurrentMain = false;
 
     window.slides.forEach((slide, index) => {
-        if (slide.id === 'landing-slide') return;
+        if (slide.id === 'landing-slide' || slide.getAttribute('data-type') === 'Question') return; // Hide individual questions from TOC
         
         let unit = slide.getAttribute('data-unit');
         let mainTopic = slide.getAttribute('data-maintopic');
@@ -263,24 +395,18 @@ window.handleLogin = async function() {
             }
         } else {
             document.getElementById('login-error').style.display = 'block';
-            btn.innerText = "Login to Module";
+            btn.innerText = "Login to Library";
         }
     } catch(e) {
         console.error(e);
-        btn.innerText = "Login to Module";
+        btn.innerText = "Login to Library";
     }
 };
 
 function initEnvironment() {
-    const container = document.getElementById('slides-container');
     const slideArray = Array.from(document.querySelectorAll('.slide'));
-    
-    // Maintain DOM order as defined in the JS file, but assign global indexes
-    slideArray.forEach((s, idx) => {
-        s.dataset.globalIndex = idx;
-    });
-    
-    window.slides = document.querySelectorAll('.slide'); 
+    slideArray.forEach((s, idx) => { s.dataset.globalIndex = idx; });
+    window.slides = slideArray; 
     
     window.slides.forEach(slide => {
         const qId = slide.getAttribute('data-question-id');
@@ -331,28 +457,64 @@ function initEnvironment() {
             }
         }
     });
+
+    updateReviewHubs();
 }
 
-function updateNavVisibility() {
-    const currentSlide = window.slides[window.currentSlideIndex];
-    if (!currentSlide) return;
+window.resetSetLogic = async function(unit, difficulty) {
+    if(!confirm(`Warning: Resetting the ${difficulty} set for ${unit} will erase your answers for these specific questions. Proceed?`)) return;
     
-    const isTeacher = window.currentUser && window.currentUser.role === 'teacher';
-    const prevBtn = document.getElementById('btn-prev');
-    const nextBtn = document.getElementById('btn-next');
-    
-    let prevDisabled = window.currentSlideIndex === 0;
-    let nextDisabled = window.currentSlideIndex === window.slides.length - 1;
-    
-    if (!isTeacher && currentSlide.getAttribute('data-type') === 'Question') {
-        const qId = currentSlide.getAttribute('data-question-id');
-        if (!window.studentAnswers[qId]) {
-            nextDisabled = true;
+    window.slides.forEach(s => {
+        if(s.getAttribute('data-unit') === unit && s.getAttribute('data-difficulty') === difficulty && s.getAttribute('data-type') === 'Question') {
+            const qId = s.getAttribute('data-question-id');
+            if (qId) {
+                delete window.studentAnswers[qId];
+                
+                s.removeAttribute('data-locked');
+                s.removeAttribute('data-timer-expired');
+                const inputEl = document.getElementById(`input-${qId}`);
+                if(inputEl) { inputEl.value = ''; inputEl.disabled = false; inputEl.style.backgroundColor = ''; inputEl.style.cursor = 'text'; }
+                s.querySelectorAll('.mcq-option').forEach(el => { el.classList.remove('selected'); el.style.pointerEvents = 'auto'; });
+                
+                const subBtn = document.getElementById(`submit-${qId}`);
+                const expBtn = document.getElementById(`exp-${qId}`);
+                const fb = document.getElementById(`feedback-${qId}`);
+                if(subBtn) subBtn.style.display = 'inline-block';
+                if(expBtn) expBtn.style.display = 'none';
+                if(fb) fb.style.display = 'none';
+            }
         }
-    }
+    });
     
-    if (prevBtn) prevBtn.disabled = prevDisabled;
-    if (nextBtn) nextBtn.disabled = nextDisabled;
+    await saveToFirebase();
+    updateReviewHubs(); 
+    
+    // Jump back to the Review Hub slide for this unit
+    const hubIndex = window.slides.findIndex(s => s.getAttribute('data-type') === 'ReviewHub' && s.getAttribute('data-unit') === unit);
+    if(hubIndex !== -1) showSlide(hubIndex);
+};
+
+function updateSetScoreDisplay(setName) {
+    let sScore = 0;
+    let sMax = 0;
+    window.slides.forEach(s => {
+        if(s.getAttribute('data-unit') === setName && s.getAttribute('data-type') === 'Question') {
+            const qId = s.getAttribute('data-question-id');
+            const pts = parseInt(s.getAttribute('data-points')) || 0;
+            sMax += pts;
+            
+            const ansData = window.studentAnswers[qId];
+            if(ansData) {
+                let userAns = typeof ansData === 'object' ? ansData.val : ansData;
+                let isExp = typeof ansData === 'object' ? ansData.expired : false;
+                if(String(userAns).toLowerCase() === String(s.getAttribute('data-answer')).toLowerCase() && !isExp) {
+                    sScore += pts;
+                }
+            }
+        }
+    });
+    document.getElementById('user-score').innerText = `${sScore} / ${sMax}`;
+    return { sScore, sMax };
 }
 
 window.returnToLanding = function() {
@@ -365,10 +527,11 @@ window.showSlide = function(targetIndex) {
     if(!targetSlide) return;
 
     const unit = targetSlide.getAttribute('data-unit');
+    const type = targetSlide.getAttribute('data-type');
     const isTeacher = window.currentUser && window.currentUser.role === 'teacher';
     const hasSubscribed = isTeacher || window.userSubscriptions.some(sub => sub.bookId === window.currentBookId && sub.expiry > Date.now());
 
-    // --- TRIAL / SUBSCRIPTION CHECK ---
+    // --- 1-HOUR TRIAL & SUBSCRIPTION CHECK ---
     if (unit && unit !== 'Unit 1' && !hasSubscribed && targetSlide.id !== 'landing-slide') {
         const trialKey = `${window.currentBookId}_${unit}`;
         const trialStart = window.unitTrials[trialKey];
@@ -386,27 +549,16 @@ window.showSlide = function(targetIndex) {
         }
     }
 
-    // Question Order Enforcement for Students
-    if (!isTeacher && targetSlide.getAttribute('data-type') === 'Question') {
-        let firstUnanswered = window.slides.length;
-        for (let i = 0; i < window.slides.length; i++) {
-            if (window.slides[i].getAttribute('data-type') === 'Question') {
-                const qId = window.slides[i].getAttribute('data-question-id');
-                if (qId && !window.studentAnswers[qId]) {
-                    firstUnanswered = i;
-                    break;
-                }
-            }
-        }
-        if (targetIndex > firstUnanswered) {
-            alert("Questions need to be answered strictly in the order of presentation.");
-            return; 
-        }
-    }
-
     clearInterval(window.timerInterval);
     clearTimeout(window.narrationTimeout);
-    document.getElementById('timer-display').style.display = 'none';
+    
+    // Toggle HUD visibility: Only show when actually on a Question slide
+    const topHud = document.getElementById('top-hud');
+    if (type === 'Question') {
+        topHud.style.display = 'flex';
+    } else {
+        topHud.style.display = 'none';
+    }
 
     const direction = targetIndex > window.currentSlideIndex ? 'next' : (targetIndex < window.currentSlideIndex ? 'prev' : 'none');
     const oldSlide = window.slides[window.currentSlideIndex];
@@ -427,22 +579,22 @@ window.showSlide = function(targetIndex) {
     targetSlide.classList.add('active');
     targetSlide.scrollTop = 0;
     
-    // Move functional elements to current slide
-    if (targetSlide.id !== 'landing-slide') {
+    // Move trackers to current slide
+    if (targetSlide.id !== 'landing-slide' && type === 'Question') {
         const tracker = document.getElementById('question-tracker');
-        const navControls = document.getElementById('nav-controls');
         targetSlide.appendChild(tracker);
-        targetSlide.appendChild(navControls);
     }
 
-    updateNavVisibility();
+    updateSetScoreDisplay(unit);
 
-    if (!isTeacher && !targetSlide.hasAttribute('data-locked') && targetSlide.getAttribute('data-type') === 'Question') {
+    if (!isTeacher && !targetSlide.hasAttribute('data-locked') && type === 'Question') {
         if(targetIndex > 0) setTimeout(() => playNarration(targetSlide), 1500);
         else playNarration(targetSlide);
     } else {
         window.speechSynthesis.cancel();
     }
+    
+    updateReviewHubs(); // Ensure hub is fresh if we visit it
 };
 
 window.nextSlide = function() {
@@ -512,21 +664,20 @@ window.submitAnswer = function(qId) {
 
     window.studentAnswers[qId] = { val: userVal, expired: isExpired };
     
-    saveToFirebase();
-    updateNavVisibility(); 
-
-    // Check if entire unit is answered to show celebration
     const currentUnit = slide.getAttribute('data-unit');
-    let unitComplete = true;
+    updateSetScoreDisplay(currentUnit);
+    saveToFirebase();
+
+    let diffComplete = true;
+    const currentDiff = slide.getAttribute('data-difficulty');
     window.slides.forEach(s => {
-        if(s.getAttribute('data-unit') === currentUnit && s.getAttribute('data-type') === 'Question') {
+        if(s.getAttribute('data-unit') === currentUnit && s.getAttribute('data-difficulty') === currentDiff && s.getAttribute('data-type') === 'Question') {
             const sqId = s.getAttribute('data-question-id');
-            if(sqId && !window.studentAnswers[sqId]) unitComplete = false;
+            if(sqId && !window.studentAnswers[sqId]) diffComplete = false;
         }
     });
 
-    if (unitComplete && !window.celebratedSets.has(currentUnit) && window.currentUser.role !== 'teacher') {
-        window.celebratedSets.add(currentUnit);
+    if (diffComplete && window.currentUser.role !== 'teacher') {
         setTimeout(() => { document.getElementById('celebration-modal').style.display = 'flex'; }, 1000);
     } else {
          setTimeout(() => {
