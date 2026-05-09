@@ -2,7 +2,7 @@
 import { collection, query, getDocs, orderBy, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
 import { db, loginUser } from './auth.js';
 
-// Import Books (As you add more books, import them here)
+// Import Books
 import { bookDetails as fabm01Details, bookContent as fabm01Content } from './FABM01/fabm01.js';
 
 window.availableBooks = [
@@ -21,31 +21,92 @@ window.section = "Default";
 window.studentAnswers = {}; 
 window.celebratedSets = new Set(); 
 window.targetSetToStart = null;
-window.userSubscriptions = []; // Holds the IDs of books the user has purchased
+window.userSubscriptions = []; // Now holds objects: { bookId: "FABM01", expiry: timestamp }
 
 document.addEventListener('DOMContentLoaded', () => {
     populateBookDropdown();
 });
 
+// Hide dropdowns when clicking outside
 document.addEventListener('click', function(event) {
     const nav = document.getElementById('slide-navigator');
-    const btn = document.getElementById('nav-toggle-btn');
-    if (!nav.classList.contains('collapsed') && !nav.contains(event.target) && event.target !== btn) {
+    const navBtn = document.getElementById('nav-toggle-btn');
+    if (!nav.classList.contains('collapsed') && !nav.contains(event.target) && event.target !== navBtn) {
         nav.classList.add('collapsed');
+    }
+
+    const dropdown = document.getElementById('custom-book-selector');
+    const body = document.getElementById('dropdown-body');
+    if (dropdown && body && !dropdown.contains(event.target)) {
+        body.style.display = 'none';
     }
 });
 
+// New Custom Category Accordion Dropdown
 function populateBookDropdown() {
-    const selector = document.getElementById('book-selector');
-    selector.innerHTML = '';
-    window.availableBooks.forEach((book, index) => {
-        const opt = document.createElement('option');
-        opt.value = book.details.id;
-        opt.innerText = book.details.title;
-        selector.appendChild(opt);
+    const body = document.getElementById('dropdown-body');
+    body.innerHTML = '';
+    
+    // Group books by category
+    const categories = {};
+    window.availableBooks.forEach(book => {
+        const cat = book.details.category || 'Uncategorized';
+        if (!categories[cat]) categories[cat] = [];
+        categories[cat].push(book);
     });
-    window.currentBookId = window.availableBooks[0].details.id;
+
+    // Build DOM
+    for (const cat in categories) {
+        const catDiv = document.createElement('div');
+        catDiv.className = 'category-group';
+        
+        const catHeader = document.createElement('div');
+        catHeader.className = 'category-header';
+        catHeader.innerText = cat + ' ▼';
+        
+        const bookList = document.createElement('div');
+        bookList.className = 'category-book-list';
+        bookList.style.display = 'none';
+
+        // Accordion Logic: Click category to show books, hide others
+        catHeader.onclick = (e) => {
+            e.stopPropagation();
+            document.querySelectorAll('.category-book-list').forEach(list => {
+                if (list !== bookList) list.style.display = 'none';
+            });
+            bookList.style.display = bookList.style.display === 'none' ? 'block' : 'none';
+        };
+
+        categories[cat].forEach(book => {
+            const bookItem = document.createElement('div');
+            bookItem.className = 'book-item';
+            bookItem.innerText = book.details.title;
+            
+            bookItem.onclick = (e) => {
+                e.stopPropagation();
+                document.querySelector('.dropdown-header').innerText = book.details.title;
+                document.getElementById('dropdown-body').style.display = 'none';
+                window.handleBookChange(book.details.id);
+            };
+            bookList.appendChild(bookItem);
+        });
+
+        catDiv.appendChild(catHeader);
+        catDiv.appendChild(bookList);
+        body.appendChild(catDiv);
+    }
+    
+    // Set initial book on load
+    if (window.availableBooks.length > 0) {
+        window.currentBookId = window.availableBooks[0].details.id;
+        document.querySelector('.dropdown-header').innerText = window.availableBooks[0].details.title;
+    }
 }
+
+window.toggleDropdown = function() {
+    const body = document.getElementById('dropdown-body');
+    body.style.display = body.style.display === 'none' ? 'block' : 'none';
+};
 
 window.handleBookChange = function(bookId) {
     window.currentBookId = bookId;
@@ -57,19 +118,22 @@ function loadBookContent() {
     const container = document.getElementById('slides-container');
     const selectedBook = window.availableBooks.find(b => b.details.id === window.currentBookId);
     
-    // Check if user has access (teachers have full access automatically)
     const isTeacher = window.currentUser && window.currentUser.role === 'teacher';
-    const hasSubscribed = isTeacher || window.userSubscriptions.includes(window.currentBookId);
+    
+    // Check if user has an active, non-expired rental
+    const hasSubscribed = isTeacher || window.userSubscriptions.some(sub => {
+        // Fallback for older data that might just be string IDs
+        if (typeof sub === 'string') return sub === window.currentBookId; 
+        return sub.bookId === window.currentBookId && sub.expiry > Date.now();
+    });
 
     if (container && selectedBook) {
         container.innerHTML = selectedBook.content;
 
-        // Apply Paywall: Remove restricted elements if not subscribed
         if (!hasSubscribed) {
             const slides = container.querySelectorAll('.slide');
             slides.forEach(slide => {
                 const difficulty = slide.getAttribute('data-difficulty');
-                // Lock out non-easy questions and potentially theory depending on your specific monetization logic
                 if (difficulty && difficulty !== 'Easy') {
                     slide.remove(); 
                 }
@@ -78,7 +142,7 @@ function loadBookContent() {
             const subBtn = document.getElementById('subscribe-btn');
             if(subBtn) {
                 subBtn.style.display = 'block';
-                subBtn.innerText = `Unlock Book (₱${selectedBook.details.price})`;
+                subBtn.innerText = `Rent Book (₱${selectedBook.details.rent.toFixed(2)} / 6mo)`;
             }
         } else {
             const subBtn = document.getElementById('subscribe-btn');
@@ -86,29 +150,37 @@ function loadBookContent() {
         }
     }
     
-    // Re-initialize environment with the newly filtered slides
     initEnvironment();
 }
 
 window.showSubscriptionModal = function() {
     const selectedBook = window.availableBooks.find(b => b.details.id === window.currentBookId);
     document.getElementById('sub-book-title').innerText = selectedBook.details.title;
-    document.getElementById('sub-book-price').innerText = `₱${selectedBook.details.price.toFixed(2)}`;
+    document.getElementById('sub-book-price').innerText = `₱${selectedBook.details.rent.toFixed(2)}`;
     
     document.getElementById('overlay').style.display = 'flex';
     document.getElementById('subscription-modal').style.display = 'flex';
-    document.getElementById('container').style.display = 'none';
 };
 
 window.processSubscription = async function() {
-    // Note: In a real environment, integrate your payment gateway here (Stripe, PayMongo, etc.)
     const btn = document.querySelector('#subscription-modal .start-btn');
     btn.innerText = "Processing...";
     
     setTimeout(async () => {
-        window.userSubscriptions.push(window.currentBookId);
+        // Calculate 6 months expiry
+        const expiryDate = new Date();
+        expiryDate.setMonth(expiryDate.getMonth() + 6);
         
-        // Save subscription state to Firestore
+        // Remove old subscription record for this book to prevent duplicates
+        window.userSubscriptions = window.userSubscriptions.filter(sub => 
+            (typeof sub === 'string' ? sub : sub.bookId) !== window.currentBookId
+        );
+        
+        window.userSubscriptions.push({
+            bookId: window.currentBookId,
+            expiry: expiryDate.getTime()
+        });
+        
         if (window.currentUser && db) {
             const u = window.currentUser;
             const docId = `${u.CN || '00'}-${u.Idnumber}-${u.LastName} ${u.FirstName}`;
@@ -123,7 +195,7 @@ window.processSubscription = async function() {
         const overlay = document.getElementById('overlay');
         if(overlay) overlay.style.display = 'none';
         
-        alert("Subscription successful! Unlocking full book content.");
+        alert("Rental successful! You have full access for 6 months.");
         loadBookContent();
         showDashboard();
     }, 1500);
