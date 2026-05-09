@@ -1,7 +1,8 @@
 export const bookDetails = {
     id: "FABM01",
     title: "Fundamentals in Business Management and Accountancy",
-    price: 999.00
+    category: "Accounting",
+    rent: 299.00
 };
 
 export const bookContent = `
