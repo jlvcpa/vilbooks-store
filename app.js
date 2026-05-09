@@ -1,4 +1,3 @@
-// app.js
 import { collection, query, getDocs, orderBy, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
 import { db, loginUser } from './auth.js';
 
@@ -21,17 +20,17 @@ window.section = "Default";
 window.studentAnswers = {}; 
 window.celebratedSets = new Set(); 
 window.targetSetToStart = null;
-window.userSubscriptions = []; // Now holds objects: { bookId: "FABM01", expiry: timestamp }
+window.userSubscriptions = []; 
 
 document.addEventListener('DOMContentLoaded', () => {
     populateBookDropdown();
 });
 
-// Hide dropdowns when clicking outside
+// Close dropdowns & nav on outside click
 document.addEventListener('click', function(event) {
     const nav = document.getElementById('slide-navigator');
     const navBtn = document.getElementById('nav-toggle-btn');
-    if (!nav.classList.contains('collapsed') && !nav.contains(event.target) && event.target !== navBtn) {
+    if (nav && !nav.classList.contains('collapsed') && !nav.contains(event.target) && event.target !== navBtn) {
         nav.classList.add('collapsed');
     }
 
@@ -42,12 +41,28 @@ document.addEventListener('click', function(event) {
     }
 });
 
-// New Custom Category Accordion Dropdown
+// New Welcome Screen Population
+function populateWelcomeBooks() {
+    const list = document.getElementById('welcome-book-list');
+    list.innerHTML = '';
+    
+    window.availableBooks.forEach(book => {
+        const btn = document.createElement('button');
+        btn.className = 'nav-btn-secondary';
+        btn.innerText = book.details.title;
+        btn.onclick = () => {
+            document.getElementById('welcome-overlay').style.display = 'none';
+            document.querySelector('.dropdown-header').innerText = book.details.title;
+            window.handleBookChange(book.details.id);
+        };
+        list.appendChild(btn);
+    });
+}
+
 function populateBookDropdown() {
     const body = document.getElementById('dropdown-body');
     body.innerHTML = '';
     
-    // Group books by category
     const categories = {};
     window.availableBooks.forEach(book => {
         const cat = book.details.category || 'Uncategorized';
@@ -55,7 +70,6 @@ function populateBookDropdown() {
         categories[cat].push(book);
     });
 
-    // Build DOM
     for (const cat in categories) {
         const catDiv = document.createElement('div');
         catDiv.className = 'category-group';
@@ -68,7 +82,6 @@ function populateBookDropdown() {
         bookList.className = 'category-book-list';
         bookList.style.display = 'none';
 
-        // Accordion Logic: Click category to show books, hide others
         catHeader.onclick = (e) => {
             e.stopPropagation();
             document.querySelectorAll('.category-book-list').forEach(list => {
@@ -96,7 +109,6 @@ function populateBookDropdown() {
         body.appendChild(catDiv);
     }
     
-    // Set initial book on load
     if (window.availableBooks.length > 0) {
         window.currentBookId = window.availableBooks[0].details.id;
         document.querySelector('.dropdown-header').innerText = window.availableBooks[0].details.title;
@@ -119,10 +131,7 @@ function loadBookContent() {
     const selectedBook = window.availableBooks.find(b => b.details.id === window.currentBookId);
     
     const isTeacher = window.currentUser && window.currentUser.role === 'teacher';
-    
-    // Check if user has an active, non-expired rental
     const hasSubscribed = isTeacher || window.userSubscriptions.some(sub => {
-        // Fallback for older data that might just be string IDs
         if (typeof sub === 'string') return sub === window.currentBookId; 
         return sub.bookId === window.currentBookId && sub.expiry > Date.now();
     });
@@ -167,11 +176,9 @@ window.processSubscription = async function() {
     btn.innerText = "Processing...";
     
     setTimeout(async () => {
-        // Calculate 6 months expiry
         const expiryDate = new Date();
         expiryDate.setMonth(expiryDate.getMonth() + 6);
         
-        // Remove old subscription record for this book to prevent duplicates
         window.userSubscriptions = window.userSubscriptions.filter(sub => 
             (typeof sub === 'string' ? sub : sub.bookId) !== window.currentBookId
         );
@@ -224,12 +231,20 @@ window.handleLogin = async function() {
                 if (docSnap.exists()) {
                     window.studentAnswers = docSnap.data().answers || {};
                 }
-                loadBookContent();
-                showDashboard();
+                
+                // Show Welcome Screen instead of jumping straight to book
+                document.getElementById('welcome-title').innerText = `Welcome, ${user.FirstName || 'Student'}!`;
+                populateWelcomeBooks();
+                document.getElementById('welcome-overlay').style.display = 'flex';
+                
             } else {
                 document.getElementById('container').style.display = 'flex';
                 document.body.classList.add('role-teacher');
-                loadBookContent();
+                
+                document.getElementById('welcome-title').innerText = `Welcome, Teacher!`;
+                populateWelcomeBooks();
+                document.getElementById('welcome-overlay').style.display = 'flex';
+                
                 loadTeacherRoster();
             }
         } else {
@@ -705,6 +720,12 @@ window.triggerCelebration = function(setName) {
     }
 };
 
+window.returnToDashboardFromCeleb = function() {
+    document.getElementById('celebration-modal').style.display = 'none';
+    document.getElementById('celeb-box').classList.remove('show');
+    showDashboard();
+}
+
 function playNarration(slide) {
     window.speechSynthesis.cancel();
     clearTimeout(window.narrationTimeout);
@@ -914,6 +935,8 @@ window.showSlide = function(targetIndex) {
 
 window.nextSlide = function() {
     const currentSlide = window.slides[window.currentSlideIndex];
+    if (!currentSlide) return;
+    
     const currentSet = currentSlide.getAttribute('data-unit');
     const nextSlideNode = window.slides[window.currentSlideIndex + 1];
 
@@ -1160,38 +1183,4 @@ function previewStudent(data, rowDiv) {
         }
     });
     showSlide(0);
-}
-
-let touchStartX = 0;
-let touchEndX = 0;
-
-document.addEventListener('touchstart', e => {
-    if (e.target.closest('#slides-container')) {
-        touchStartX = e.changedTouches[0].screenX;
-    }
-}, { passive: true });
-
-document.addEventListener('touchend', e => {
-    if (e.target.closest('#slides-container')) {
-        touchEndX = e.changedTouches[0].screenX;
-        handleSwipeGesture();
-    }
-}, { passive: true });
-
-function handleSwipeGesture() {
-    const swipeThreshold = 50; 
-
-    if (touchStartX - touchEndX > swipeThreshold) {
-        const nextBtn = document.getElementById('btn-next');
-        if (nextBtn && !nextBtn.disabled) {
-            window.nextSlide();
-        }
-    }
-    
-    if (touchEndX - touchStartX > swipeThreshold) {
-        const prevBtn = document.getElementById('btn-prev');
-        if (prevBtn && !prevBtn.disabled) {
-            window.prevSlide();
-        }
-    }
 }
