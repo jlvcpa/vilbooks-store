@@ -6,7 +6,7 @@
 <title>VilBooks Store</title>
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="book-mode"> <!-- Force book mode by default -->
 
 <div id="login-overlay">
     <div class="login-box">
@@ -16,44 +16,26 @@
         <label>Password</label>
         <input type="password" id="auth-pass" placeholder="Enter Password">
         <div id="login-error" style="color: #f85149; margin-bottom: 15px; font-size: 0.9rem; display: none;">Invalid credentials</div>
-        <button class="start-btn" onclick="handleLogin()">Login to Module</button>
-    </div>
-</div>
-
-<!-- New Welcome Screen -->
-<div id="welcome-overlay" style="display:none;">
-    <div class="welcome-box">
-        <h2 id="welcome-title" style="color: #58a6ff; font-size: 2rem; margin-bottom: 10px;">Welcome!</h2>
-        <p style="color: #8b949e; font-size: 1.1rem; margin-bottom: 25px;">Please select a book to open from your library:</p>
-        <div id="welcome-book-list"></div>
-    </div>
-</div>
-
-<div id="dashboard-overlay" style="display:none;">
-    <div class="dashboard-box">
-        <h2 style="color: #58a6ff; margin-bottom: 15px;">Course Dashboard</h2>
-        <div class="dashboard-instruction">
-            <strong>Notice:</strong> You must complete question units strictly in order. You may review completed units at any time. 
-            <br><br><em>Warning: Unsubscribed users only have access to "Easy" difficulty practice sets.</em>
-        </div>
-        <div id="dashboard-sets"></div>
-    </div>
-</div>
-
-<div id="headsup-overlay" style="display:none;">
-    <div class="headsup-box">
-        <h2 id="headsup-title" style="color: #3fb950; font-size: 2.5rem; margin-bottom: 20px;">Prepare for Unit</h2>
-        <p style="color: #c9d1d9; font-size: 1.2rem; margin-bottom: 30px;">Get ready. The timer will begin immediately after the question is fully narrated.</p>
-        <button class="start-btn" onclick="executeStartSet()">Start Now</button>
-        <button class="nav-btn-secondary" onclick="showDashboard()">Back to Dashboard</button>
+        <button class="start-btn" onclick="handleLogin()">Login to Library</button>
     </div>
 </div>
 
 <div id="celebration-modal" style="display:none;">
     <div class="celeb-box" id="celeb-box">
         <div class="celeb-title">🎉 Congratulations! 🎉</div>
-        <div class="celeb-text" id="celeb-msg">Thank you for finishing the practice set. You got 0 out of 0 highest possible score!</div>
-        <button class="start-btn" onclick="returnToDashboardFromCeleb()">Return to Dashboard</button>
+        <div class="celeb-text" id="celeb-msg">Thank you for finishing the practice set.</div>
+        <button class="start-btn" onclick="returnToLanding()">Return to Table of Contents</button>
+    </div>
+</div>
+
+<!-- 1-Hour Trial Modal -->
+<div id="trial-modal" style="display:none;">
+    <div class="login-box" style="text-align: center;">
+        <h2 style="color: #58a6ff; margin-bottom: 15px;">Premium Content</h2>
+        <p style="color: #c9d1d9; font-size: 1.1rem; margin-bottom: 20px;">You are about to access <strong id="trial-unit-name"></strong>. You can start a free 1-hour trial to evaluate this unit, or rent the book for unlimited access.</p>
+        <button class="start-btn" onclick="startUnitTrial()">Start 1-Hour Trial</button>
+        <button class="nav-btn-secondary" style="border-color:#d29922; color:#d29922;" onclick="document.getElementById('trial-modal').style.display='none'; showSubscriptionModal();">Rent Book</button>
+        <button class="nav-btn-secondary" onclick="document.getElementById('trial-modal').style.display='none'; document.getElementById('overlay').style.display='none';">Cancel</button>
     </div>
 </div>
 
@@ -61,7 +43,7 @@
 <div id="subscription-modal" style="display:none;">
     <div class="login-box" style="text-align: center;">
         <h2 style="color: #d29922; margin-bottom: 15px;">Unlock Full Access</h2>
-        <p style="color: #c9d1d9; font-size: 1rem; margin-bottom: 20px;">Rent <span id="sub-book-title" style="font-weight:bold; color:#fff;"></span> for 6 months to unlock Average and Difficult practice questions, plus in-depth theory discussions.</p>
+        <p style="color: #c9d1d9; font-size: 1rem; margin-bottom: 20px;">Rent <span id="sub-book-title" style="font-weight:bold; color:#fff;"></span> for 6 months to unlock unlimited access to all units and practice questions.</p>
         <h3 style="color: #58a6ff; font-size: 2rem; margin-bottom: 25px;" id="sub-book-price">₱0.00</h3>
         <button class="start-btn" style="background:#238636;" onclick="processSubscription()">Confirm Payment</button>
         <button class="nav-btn-secondary" onclick="document.getElementById('subscription-modal').style.display='none'; document.getElementById('overlay').style.display='none';">Cancel</button>
@@ -77,12 +59,11 @@
             <div class="dropdown-body" id="dropdown-body" style="display: none;"></div>
         </div>
 
-        <button id="dashboard-toggle-btn" onclick="showDashboard()">🏠 Dashboard</button>
         <button id="subscribe-btn" onclick="showSubscriptionModal()" style="display:none;">Rent Book</button>
     </div>
     
     <div id="slide-navigator" class="collapsed">
-        <div class="nav-header">Unit Content</div>
+        <div class="nav-header">Library Contents</div>
         <ul id="nav-list"></ul>
     </div>
 
