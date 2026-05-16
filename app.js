@@ -7,7 +7,7 @@ import { bookDetails as fabm01Details, bookModules as fabm01Modules } from './FA
 import { bookDetails as fabm02Details, bookModules as fabm02Modules } from './FABM02/fabm02.js';
 
 window.availableBooks = [
-    { details: fabm01Details, modules: fabm01Modules }
+    { details: fabm01Details, modules: fabm01Modules },
     { details: fabm02Details, modules: fabm02Modules }
 
 ];
